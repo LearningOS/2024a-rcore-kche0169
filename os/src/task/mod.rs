@@ -14,9 +14,10 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
-use crate::config::MAX_APP_NUM;
+use crate::config::{MAX_APP_NUM, MAX_SYSCALL_NUM};
 use crate::loader::{get_num_app, init_app_cx};
 use crate::sync::UPSafeCell;
+use crate::timer::{get_time_ms, get_time_us};
 use lazy_static::*;
 use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
@@ -54,6 +55,9 @@ lazy_static! {
         let mut tasks = [TaskControlBlock {
             task_cx: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
+            task_start_time_ms: get_time_ms(),
+            task_start_time_us: get_time_us(),
+            task_syscall_times: [0; MAX_SYSCALL_NUM],
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
@@ -168,4 +172,16 @@ pub fn suspend_current_and_run_next() {
 pub fn exit_current_and_run_next() {
     mark_current_exited();
     run_next_task();
+}
+
+/// get 当前正在执行的任务
+pub fn get_current_task_id() -> usize {
+    let id = TASK_MANAGER.inner.exclusive_access().current_task.clone();
+    id
+}
+
+/// get current task status
+pub fn get_current_task_status() -> TaskControlBlock {
+    let id = TASK_MANAGER.inner.exclusive_access().current_task.clone();
+    TASK_MANAGER.inner.exclusive_access().tasks[id]
 }
