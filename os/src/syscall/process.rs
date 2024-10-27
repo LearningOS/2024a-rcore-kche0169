@@ -2,7 +2,7 @@
 use crate::{
     config::MAX_SYSCALL_NUM,
     task::{exit_current_and_run_next, get_current_task_status, suspend_current_and_run_next, TaskStatus},
-    timer::{get_time_ms, get_time_us},
+    timer::get_time_us,
 };
 
 #[repr(C)]
@@ -55,13 +55,13 @@ pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
     trace!("kernel: sys_task_info");
     // syscall ID: 410
     // 查询当前正在执行的任务信息，任务信息包括任务控制块相关信息（任务状态）、任务使用的系统调用及调用次数、系统调用时刻距离任务第一次被调度时刻的时长（单位ms）。
-    let mut current_task_status = get_current_task_status();
-    current_task_status.task_syscall_times[410] += 1;
+    let current_task_status = get_current_task_status();
     unsafe {
         (*_ti) = TaskInfo {
-            status: current_task_status.task_status,
+            status: TaskStatus::Running,
             syscall_times: current_task_status.task_syscall_times,
-            time: get_time_ms() - current_task_status.task_start_time_ms,
+            time: current_task_status.task_time_ms.unwrap(),
+            // time: get_time_ms(),
         }
 
     }
