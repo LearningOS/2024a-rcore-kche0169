@@ -30,6 +30,8 @@ mod process;
 
 use fs::*;
 use process::*;
+
+use crate::task::update_syscall_times;
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
     match syscall_id {
@@ -42,5 +44,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
         SYSCALL_MUNMAP => sys_munmap(args[0], args[1]),
         SYSCALL_SBRK => sys_sbrk(args[0] as i32),
         _ => panic!("Unsupported syscall_id: {}", syscall_id),
-    }
+    };
+    update_syscall_times(syscall_id);
+    0
 }
