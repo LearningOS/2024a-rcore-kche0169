@@ -1,10 +1,11 @@
 //! Process management syscalls
+use core::mem;
+// use alloc::vec;
+use alloc::vec::Vec;
 use crate::{
-    config::MAX_SYSCALL_NUM,
-    task::{
-        change_program_brk, exit_current_and_run_next, get_current_task_start_time, get_syscall_times, suspend_current_and_run_next, TaskStatus
-    },
-    timer::{get_time_ms, get_time_us},
+    config::MAX_SYSCALL_NUM, mm::modify_struct_field, task::{
+        change_program_brk, current_user_token, exit_current_and_run_next, get_current_task_start_time, get_syscall_times, suspend_current_and_run_next, TaskStatus
+    }, timer::{get_time_ms, get_time_us}
 };
 
 #[repr(C)]
@@ -44,14 +45,15 @@ pub fn sys_yield() -> isize {
 /// HINT: What if [`TimeVal`] is splitted by two pages ?
 pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
     trace!("kernel: sys_get_time");
-    // let token = get_user_token();
-    
-    unsafe {
-        (*_ts) = TimeVal {
-            sec: get_time_ms() / 1000,
-            usec: get_time_us() % 1_000_000,
-        }
-    }
+    let token = current_user_token();
+    let time_val_size = mem::size_of::<TimeVal>();
+    let time_val_ptr = _ts as *const u8;
+    let sec = usize_to_u8_array(get_time_us() / 1_000_000);
+    let usec = usize_to_u8_array(get_time_us() % 1_000_000);
+    let mut combined = Vec::new();
+    combined.extend(&sec);
+    combined.extend(&usec);
+    modify_struct_field(token, time_val_ptr, time_val_size, combined);
     0
 }
 
@@ -60,13 +62,19 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
 /// HINT: What if [`TaskInfo`] is splitted by two pages ?
 pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
     trace!("kernel: sys_task_info NOT IMPLEMENTED YET!");
-    unsafe {
-        (*_ti) = TaskInfo {
-            status: TaskStatus::Running,
-            syscall_times: get_syscall_times(),
-            time: get_time_ms() - get_current_task_start_time()
-        }
-    }
+    get_current_task_start_time();
+    get_time_ms();
+    get_syscall_times();
+    // let token = current_user_token();
+    // let time_val_size = mem::size_of::<TimeVal>();
+    // let time_val_ptr = _ts as *const u8;
+    // let status = usize_to_u8_array(TaskStatus::Running);
+    // let sec = usize_to_u8_array(get_time_ms() / 1000);
+    // let usec = usize_to_u8_array(get_time_us() % 1_000_000);
+    // let mut combined = Vec::new();
+    // combined.extend(&sec);
+    // combined.extend(&usec);
+    // modify_struct_field(token, time_val_ptr, time_val_size, combined);
     0
 }
 
@@ -89,4 +97,20 @@ pub fn sys_sbrk(size: i32) -> isize {
     } else {
         -1
     }
+}
+/// 拆分
+// fn u8_array_to_usize(bytes: &[u8]) -> usize {
+//     let mut value: usize = 0;
+//     for (i, &byte) in bytes.iter().enumerate() {
+//         value |= (byte as usize) << (i * 8); // 将每个字节左移并合并
+//     }
+//     value
+// }
+/// dox
+fn usize_to_u8_array(value: usize) -> [u8; mem::size_of::<usize>()] {
+    let mut bytes = [0u8; mem::size_of::<usize>()];
+    for (i, byte) in bytes.iter_mut().enumerate() {
+        *byte = (value >> (i * 8)) as u8; // 获取每个字节
+    }
+    bytes
 }

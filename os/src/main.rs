@@ -100,11 +100,13 @@ pub fn rust_main() -> ! {
     clear_bss();
     kernel_log_info();
     mm::init();
+
     println!("[kernel] back to world!");
     mm::remap_test();
     trap::init();
     trap::enable_timer_interrupt();
     timer::set_next_trigger();
     task::run_first_task();
+   
     panic!("Unreachable in rust_main!");
 }

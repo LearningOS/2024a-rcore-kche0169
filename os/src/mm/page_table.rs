@@ -171,3 +171,33 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
     }
     v
 }
+
+/// doc
+pub fn modify_struct_field(token: usize, ptr: *const u8, len: usize, data: Vec<u8>) -> isize {
+    let page_table = PageTable::from_token(token);
+    let mut start = ptr as usize;
+    let end = start + len; //结构体的截止的地方
+    let mut  index = 0;
+    while start < end {
+        let start_va = VirtAddr::from(start);
+        let mut vpn = start_va.floor();
+        let ppn = page_table.translate(vpn).unwrap().ppn();
+        vpn.step();
+        let mut end_va: VirtAddr = vpn.into();
+        end_va = end_va.min(VirtAddr::from(end));
+        let offset = start_va.page_offset();
+        let bytes = ppn.get_bytes_array();
+        let next_vp_end:usize = end_va.into();
+        let bytes_to_write = next_vp_end - start;
+        let ramain_space = 4096 - offset; // pp中可以被写入的数量
+        let write_size = ramain_space.min(data.len() - index).min(bytes_to_write);
+        if write_size == 0 {
+            break;
+        }
+        bytes[offset..offset + write_size].copy_from_slice(&data[index..index + write_size]);
+        index += write_size;
+        start += write_size;
+        // start = end_va.into();
+    }
+    0
+}
