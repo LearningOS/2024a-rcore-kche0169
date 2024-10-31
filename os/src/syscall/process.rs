@@ -3,7 +3,9 @@ use core::mem;
 // use alloc::vec;
 use alloc::vec::Vec;
 use crate::{
-    config::MAX_SYSCALL_NUM, mm::modify_struct_field, task::{
+    config::MAX_SYSCALL_NUM, 
+    mm::{modify_struct_field, translated_struct_ptr}, 
+    task::{
         change_program_brk, current_user_token, exit_current_and_run_next, get_current_task_start_time, get_syscall_times, suspend_current_and_run_next, TaskStatus
     }, timer::{get_time_ms, get_time_us}
 };
@@ -62,19 +64,14 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
 /// HINT: What if [`TaskInfo`] is splitted by two pages ?
 pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
     trace!("kernel: sys_task_info NOT IMPLEMENTED YET!");
-    get_current_task_start_time();
-    get_time_ms();
-    get_syscall_times();
-    // let token = current_user_token();
-    // let time_val_size = mem::size_of::<TimeVal>();
-    // let time_val_ptr = _ts as *const u8;
-    // let status = usize_to_u8_array(TaskStatus::Running);
-    // let sec = usize_to_u8_array(get_time_ms() / 1000);
-    // let usec = usize_to_u8_array(get_time_us() % 1_000_000);
-    // let mut combined = Vec::new();
-    // combined.extend(&sec);
-    // combined.extend(&usec);
-    // modify_struct_field(token, time_val_ptr, time_val_size, combined);
+
+    let ti = translated_struct_ptr(current_user_token(), _ti);
+
+    *ti = TaskInfo {
+        status: TaskStatus::Running,
+        syscall_times: get_syscall_times(),
+        time: get_time_ms() - get_current_task_start_time(),
+    };
     0
 }
 

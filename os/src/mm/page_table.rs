@@ -1,6 +1,8 @@
 //! Implementation of [`PageTableEntry`] and [`PageTable`].
 
-use super::{frame_alloc, FrameTracker, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
+
+
+use super::{frame_alloc, FrameTracker, PhysPageNum, StepByOne, VirtAddr, VirtPageNum, PhysAddr};
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::*;
@@ -200,4 +202,14 @@ pub fn modify_struct_field(token: usize, ptr: *const u8, len: usize, data: Vec<u
         // start = end_va.into();
     }
     0
+}
+/// 转换指针到物理地址
+pub fn translated_struct_ptr<T>(token: usize, ptr: * const T)->  &'static mut T {
+    let page_table = PageTable::from_token(token);
+    let va = VirtAddr::from(ptr as usize);
+    let vpn = va.floor();
+    let offset = va.page_offset();
+    let mut pa: PhysAddr = page_table.translate(vpn).unwrap().ppn().into();
+    pa.0 += offset;
+    pa.get_mut()
 }
