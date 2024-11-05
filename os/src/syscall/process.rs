@@ -3,10 +3,10 @@ use core::mem;
 // use alloc::vec;
 use alloc::vec::Vec;
 use crate::{
-    config::MAX_SYSCALL_NUM, 
+    config::{MAX_SYSCALL_NUM, PAGE_SIZE, MEMORY_END}, 
     mm::{modify_struct_field, translated_struct_ptr}, 
     task::{
-        change_program_brk, current_user_token, exit_current_and_run_next, get_current_task_start_time, get_syscall_times, suspend_current_and_run_next, TaskStatus
+        change_program_brk, current_user_token, exit_current_and_run_next, get_current_task_start_time, get_syscall_times, mmap, suspend_current_and_run_next, TaskStatus, munmap,
     }, timer::{get_time_ms, get_time_us}
 };
 
@@ -63,7 +63,7 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
 /// HINT: You might reimplement it with virtual memory management.
 /// HINT: What if [`TaskInfo`] is splitted by two pages ?
 pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
-    trace!("kernel: sys_task_info NOT IMPLEMENTED YET!");
+    trace!("kernel: sys_task_info");
 
     let ti = translated_struct_ptr(current_user_token(), _ti);
 
@@ -77,14 +77,24 @@ pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
 
 // YOUR JOB: Implement mmap.
 pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
-    trace!("kernel: sys_mmap NOT IMPLEMENTED YET!");
-    -1
+    trace!("kernel: sys_mmap");
+
+    if _start %  PAGE_SIZE != 0 || _port & !0x7 != 0 || _port & 0x7 == 0 || _start + _len > MEMORY_END{
+        return -1;
+    }
+    mmap(_start, _len, _port);
+    0
+
 }
 
 // YOUR JOB: Implement munmap.
 pub fn sys_munmap(_start: usize, _len: usize) -> isize {
-    trace!("kernel: sys_munmap NOT IMPLEMENTED YET!");
-    -1
+    trace!("kernel: sys_munmap");
+    if _start % PAGE_SIZE != 0 {
+        return -1;
+    }
+    munmap(_start, _len);
+    0
 }
 /// change data segment size
 pub fn sys_sbrk(size: i32) -> isize {

@@ -14,6 +14,7 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 use crate::loader::{get_app_data, get_num_app};
+use crate::mm::{MapPermission, VPNRange, VirtAddr};
 use crate::sync::UPSafeCell;
 use crate::timer::get_time_ms;
 use crate::trap::TrapContext;
@@ -161,6 +162,67 @@ impl TaskManager {
         }
     }
 
+    fn mmap(&self, _start: usize, _len: usize, _port: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let _start_va = VirtAddr::from(_start);
+        let _end_va = VirtAddr::from(_start + _len);
+        let _start_vpn = _start_va.floor();
+        let _end_vpn = _end_va.ceil();
+        let _current_id = inner.current_task;
+        let  current_task = &mut inner.tasks[_current_id];
+        let _permission = MapPermission::from_bits_truncate((_port << 1) as u8) | MapPermission::U;
+           // 检查权限是否有效
+        if _permission.is_empty() {
+            println!("Failed to map: invalid permission");
+            return -1; // 错误返回码
+        }
+        for vpn in VPNRange::new(_start_vpn, _end_vpn){
+            if let Some(pte) = current_task.memory_set.translate(vpn) {
+                if pte.is_valid() {
+                    return -1;
+                }
+            }
+        }
+        current_task.memory_set.insert_framed_area(_start_va, _end_va, _permission);
+        for vpn in VPNRange::new(_start_va.floor(),_end_va.ceil()){
+            match current_task.memory_set.translate(vpn) {
+                Some(pte)=>{
+                    if pte.is_valid()==false{
+                        return -1;
+                    }
+                }
+                None => {
+                    return -1;
+                }
+            }
+        }    
+        0
+    }
+
+    fn munmap(&self, _start: usize, _len: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let _start_va = VirtAddr::from(_start);
+        let _end_va = VirtAddr::from(_start + _len);
+        let _start_vpn = _start_va.floor();
+        let _end_vpn = _end_va.ceil();
+        let _current_id = inner.current_task;
+        let  current_task = &mut inner.tasks[_current_id];
+        // let vpns = VPNRange::new(start_vpn, end_vpn);
+        for vpn in VPNRange::new(_start_vpn, _end_vpn){
+            if let Some(pte) = current_task.memory_set.translate(vpn) {
+                if !pte.is_valid() {
+                    return -1;
+                }
+            } else {
+                // Also unmapped if no PTE found
+                return -1;
+            }
+        }
+           
+        current_task.memory_set.delete_framed_area(_start_va, _end_va);    
+        0
+    }
+
 }
 
 /// Run the first task in task list.
@@ -231,4 +293,14 @@ pub fn get_current_task_start_time() -> usize {
 pub fn get_syscall_times() -> [u32; MAX_SYSCALL_NUM] {
     let id = get_current_task_id();
     TASK_MANAGER.inner.exclusive_access().tasks[id].task_syscall_times
+}
+/// 实现了MMAP
+pub fn mmap(_start: usize, _len: usize, _port: usize) -> isize {
+    TASK_MANAGER.mmap(_start, _len, _port);
+    0
+}
+/// 实现了munMMAP
+pub fn munmap(_start: usize, _len: usize) -> isize {
+    TASK_MANAGER.munmap(_start, _len);
+    0
 }
